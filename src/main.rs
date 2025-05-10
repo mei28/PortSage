@@ -11,7 +11,7 @@ fn main() {
     let cli = Cli::parse();
     let processes = get_all_processes();
 
-    if cli.tui {
+    if !cli.cli {
         run_tui(&processes).unwrap();
         return;
     }

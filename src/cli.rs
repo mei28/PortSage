@@ -17,5 +17,5 @@ pub struct Cli {
     pub kill: Option<u32>,
 
     #[arg(long)]
-    pub tui: bool,
+    pub cli: bool,
 }
