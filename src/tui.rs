@@ -1,7 +1,8 @@
-use std::io;
+use std::{io, time::Instant};
 
 use crate::{bindings::KeyBindings, process::ProcessInfo};
 use anyhow::Result;
+use arboard::Clipboard;
 use crossterm::{
     event::{self, Event, KeyCode, KeyEvent},
     execute,
@@ -16,20 +17,9 @@ use ratatui::{
 enum Mode {
     Normal,
     FilterInput,
+    Detail,
 }
 
-fn apply_filter<'a>(processes: &'a [ProcessInfo], keyword: &str) -> Vec<ProcessInfo> {
-    let keyword = keyword.to_lowercase();
-    processes
-        .iter()
-        .filter(|p| {
-            p.pid.to_string().contains(&keyword)
-                || p.name.to_lowercase().contains(&keyword)
-                || p.cmd.iter().any(|c| c.to_lowercase().contains(&keyword))
-        })
-        .cloned()
-        .collect()
-}
 pub fn run_tui(processes: &[ProcessInfo]) -> Result<()> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -43,12 +33,45 @@ pub fn run_tui(processes: &[ProcessInfo]) -> Result<()> {
     let mut mode = Mode::Normal;
     let mut filter_input = String::new();
     let mut filtered_processes = processes.to_vec();
+    let mut clipboard_message: Option<(String, Instant)> = None;
 
     loop {
         terminal.draw(|f| {
             let area = f.size();
             let height = area.height.saturating_sub(4) as usize;
 
+            let chunks = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([
+                    Constraint::Length(3),
+                    Constraint::Min(0),
+                    Constraint::Length(2),
+                ])
+                .split(area);
+
+            // フィルター or 詳細表示
+            if matches!(mode, Mode::FilterInput) {
+                let input = Paragraph::new(format!("filter: {filter_input}"))
+                    .style(Style::default().fg(Color::Cyan))
+                    .block(Block::default().borders(Borders::BOTTOM));
+                f.render_widget(input, chunks[0]);
+            } else if matches!(mode, Mode::Detail) {
+                if let Some(proc) = filtered_processes.get(selected_index) {
+                    let detail = format!(
+                        "PID: {}\nName: {}\nCmd: {}\nExe: {}",
+                        proc.pid,
+                        proc.name,
+                        proc.cmd.join(" "),
+                        proc.exe,
+                    );
+                    let paragraph = Paragraph::new(detail)
+                        .style(Style::default().fg(Color::White))
+                        .block(Block::default().title("Details").borders(Borders::ALL));
+                    f.render_widget(paragraph, chunks[0]);
+                }
+            }
+
+            // プロセステーブル
             let visible = filtered_processes
                 .iter()
                 .skip(offset)
@@ -84,23 +107,21 @@ pub fn run_tui(processes: &[ProcessInfo]) -> Result<()> {
             .block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .title("PortSage - TUI (q to quit, : to filter)"),
+                    .title("PortSage - TUI (q to quit, : to filter, ↹ Tab to detail)"),
             )
             .column_spacing(2);
 
-            let chunks = Layout::default()
-                .direction(Direction::Vertical)
-                .constraints([Constraint::Length(3), Constraint::Min(0)])
-                .split(area);
-
-            if matches!(mode, Mode::FilterInput) {
-                let input = Paragraph::new(format!("filter: {filter_input}"))
-                    .style(Style::default().fg(Color::Cyan))
-                    .block(Block::default().borders(Borders::BOTTOM));
-                f.render_widget(input, chunks[0]);
-            }
-
             f.render_widget(table, chunks[1]);
+
+            // 通知があれば下部に表示
+            if let Some((msg, timestamp)) = &clipboard_message {
+                if timestamp.elapsed().as_secs_f32() < 2.0 {
+                    let notif = Paragraph::new(msg.clone())
+                        .style(Style::default().fg(Color::Green))
+                        .block(Block::default().borders(Borders::TOP));
+                    f.render_widget(notif, chunks[2]);
+                }
+            }
         })?;
 
         if event::poll(std::time::Duration::from_millis(100))? {
@@ -131,6 +152,18 @@ pub fn run_tui(processes: &[ProcessInfo]) -> Result<()> {
                         } else if key_event.code == KeyCode::Char(':') {
                             mode = Mode::FilterInput;
                             filter_input.clear();
+                        } else if key_event.code == KeyCode::Enter {
+                            if let Some(proc) = filtered_processes.get(selected_index) {
+                                if let Ok(mut clipboard) = Clipboard::new() {
+                                    let _ = clipboard.set_text(proc.pid.to_string());
+                                    clipboard_message = Some((
+                                        "✔ Copied PID to clipboard".to_string(),
+                                        Instant::now(),
+                                    ));
+                                }
+                            }
+                        } else if key_event.code == KeyCode::Tab {
+                            mode = Mode::Detail;
                         }
                     }
 
@@ -139,18 +172,6 @@ pub fn run_tui(processes: &[ProcessInfo]) -> Result<()> {
                             mode = Mode::Normal;
                         }
                         KeyCode::Enter => {
-                            filtered_processes = processes
-                                .iter()
-                                .filter(|p| {
-                                    let keyword = filter_input.to_lowercase();
-                                    p.pid.to_string().contains(&keyword)
-                                        || p.name.to_lowercase().contains(&keyword)
-                                        || p.cmd.iter().any(|c| c.to_lowercase().contains(&keyword))
-                                })
-                                .cloned()
-                                .collect();
-                            selected_index = 0;
-                            offset = 0;
                             mode = Mode::Normal;
                         }
                         KeyCode::Char(c) => {
@@ -165,11 +186,14 @@ pub fn run_tui(processes: &[ProcessInfo]) -> Result<()> {
                             selected_index = 0;
                             offset = 0;
                         }
-                        KeyCode::Enter => {
-                            mode = Mode::Normal;
-                        }
                         _ => {}
                     },
+
+                    Mode::Detail => {
+                        if key_event.code == KeyCode::Esc {
+                            mode = Mode::Normal;
+                        }
+                    }
                 }
             }
         }
@@ -178,4 +202,17 @@ pub fn run_tui(processes: &[ProcessInfo]) -> Result<()> {
     disable_raw_mode()?;
     execute!(io::stdout(), LeaveAlternateScreen)?;
     Ok(())
+}
+
+fn apply_filter(processes: &[ProcessInfo], keyword: &str) -> Vec<ProcessInfo> {
+    let keyword = keyword.to_lowercase();
+    processes
+        .iter()
+        .filter(|p| {
+            p.pid.to_string().contains(&keyword)
+                || p.name.to_lowercase().contains(&keyword)
+                || p.cmd.iter().any(|c| c.to_lowercase().contains(&keyword))
+        })
+        .cloned()
+        .collect()
 }
