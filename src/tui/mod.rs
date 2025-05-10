@@ -3,6 +3,7 @@ mod detail;
 mod filter;
 mod render;
 mod state;
+mod view;
 
 use crate::{bindings::KeyBindings, process::ProcessInfo};
 use anyhow::Result;
@@ -13,16 +14,18 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use filter::apply_filter;
-use render::draw_ui;
+use ratatui::backend::CrosstermBackend;
+use ratatui::Terminal;
 use state::{ClipboardMessage, Mode};
 use std::io;
+use view::draw_view;
 
 pub fn run_tui(processes: &[ProcessInfo]) -> Result<()> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen)?;
-    let backend = ratatui::backend::CrosstermBackend::new(stdout);
-    let mut terminal = ratatui::Terminal::new(backend)?;
+    let backend = CrosstermBackend::new(stdout);
+    let mut terminal = Terminal::new(backend)?;
 
     let bindings = KeyBindings::default();
     let mut selected_index = 0;
@@ -34,14 +37,13 @@ pub fn run_tui(processes: &[ProcessInfo]) -> Result<()> {
 
     loop {
         terminal.draw(|f| {
-            draw_ui(
+            draw_view(
                 f,
-                f.size(),
                 &filtered_processes,
-                &mode,
                 selected_index,
                 offset,
                 &filter_input,
+                &mode,
                 &clipboard_message,
             );
         })?;
@@ -54,7 +56,7 @@ pub fn run_tui(processes: &[ProcessInfo]) -> Result<()> {
                         _ if bindings.is_down(&key_event) => {
                             if selected_index + 1 < filtered_processes.len() {
                                 selected_index += 1;
-                                if selected_index >= offset + 10 {
+                                if selected_index >= offset + 20 {
                                     offset += 1;
                                 }
                             }
@@ -63,7 +65,7 @@ pub fn run_tui(processes: &[ProcessInfo]) -> Result<()> {
                             if selected_index > 0 {
                                 selected_index -= 1;
                                 if selected_index < offset {
-                                    offset -= 1;
+                                    offset = offset.saturating_sub(1);
                                 }
                             }
                         }
@@ -81,10 +83,8 @@ pub fn run_tui(processes: &[ProcessInfo]) -> Result<()> {
                         }
                         _ => {}
                     },
-
                     Mode::FilterInput => match key_event.code {
-                        event::KeyCode::Esc => mode = Mode::Normal,
-                        event::KeyCode::Enter => mode = Mode::Normal,
+                        event::KeyCode::Esc | event::KeyCode::Enter => mode = Mode::Normal,
                         event::KeyCode::Char(c) => {
                             filter_input.push(c);
                             filtered_processes = apply_filter(processes, &filter_input);
@@ -99,10 +99,8 @@ pub fn run_tui(processes: &[ProcessInfo]) -> Result<()> {
                         }
                         _ => {}
                     },
-
                     Mode::Detail => match key_event.code {
-                        event::KeyCode::Esc => mode = Mode::Normal,
-                        event::KeyCode::Char('q') => mode = Mode::Normal,
+                        event::KeyCode::Esc | event::KeyCode::Char('q') => mode = Mode::Normal,
                         _ => {}
                     },
                 }
