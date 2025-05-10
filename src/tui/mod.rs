@@ -100,7 +100,9 @@ pub fn run_tui(processes: &[ProcessInfo]) -> Result<()> {
                         _ => {}
                     },
                     Mode::Detail => match key_event.code {
-                        event::KeyCode::Esc | event::KeyCode::Char('q') => mode = Mode::Normal,
+                        event::KeyCode::Esc | event::KeyCode::Char('q') | event::KeyCode::Tab => {
+                            mode = Mode::Normal
+                        }
                         _ => {}
                     },
                 }
