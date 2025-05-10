@@ -81,6 +81,9 @@ pub fn run_tui(processes: &[ProcessInfo]) -> Result<()> {
                                 copy_pid_to_clipboard(proc, &mut clipboard_message);
                             }
                         }
+                        _ if bindings.is_kill(&key_event) => {
+                            mode = Mode::ConfirmKill;
+                        }
                         _ => {}
                     },
                     Mode::FilterInput => match key_event.code {
@@ -102,6 +105,24 @@ pub fn run_tui(processes: &[ProcessInfo]) -> Result<()> {
                     Mode::Detail => match key_event.code {
                         event::KeyCode::Esc | event::KeyCode::Char('q') | event::KeyCode::Tab => {
                             mode = Mode::Normal
+                        }
+                        _ => {}
+                    },
+                    Mode::ConfirmKill => match key_event.code {
+                        event::KeyCode::Char('y') => {
+                            if let Some(proc) = filtered_processes.get(selected_index) {
+                                let _ = nix::sys::signal::kill(
+                                    nix::unistd::Pid::from_raw(proc.pid),
+                                    nix::sys::signal::Signal::SIGKILL,
+                                );
+                                break;
+                            }
+                            // プロセスリスト更新
+                            filtered_processes = apply_filter(processes, &filter_input);
+                            mode = Mode::Normal;
+                        }
+                        event::KeyCode::Char('n') | event::KeyCode::Esc => {
+                            mode = Mode::Normal;
                         }
                         _ => {}
                     },

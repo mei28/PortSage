@@ -34,6 +34,35 @@ pub fn draw_view(
             draw_floating_detail(f, proc);
         }
     }
+    if matches!(mode, Mode::ConfirmKill) {
+        draw_kill_confirm(f);
+    }
+}
+
+fn draw_kill_confirm(f: &mut Frame) {
+    let area = f.size();
+    let width = 40;
+    let height = 5;
+    let x = (area.width.saturating_sub(width)) / 2;
+    let y = (area.height.saturating_sub(height)) / 2;
+    let dialog_area = Rect::new(x, y, width, height);
+
+    // 背景を塗りつぶしてゴミ表示を防ぐ
+    let clear = Paragraph::new("".repeat((width * height) as usize))
+        .style(Style::default().bg(Color::Black));
+    f.render_widget(clear, dialog_area);
+
+    let text = "Kill this process? (y/n)";
+    let paragraph = Paragraph::new(text)
+        .block(
+            Block::default()
+                .title("Confirm Kill")
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Red))
+                .style(Style::default().bg(Color::Black)),
+        )
+        .style(Style::default().fg(Color::White));
+    f.render_widget(paragraph, dialog_area);
 }
 
 fn draw_header(f: &mut Frame, area: Rect, filter_input: &str, mode: &Mode) {

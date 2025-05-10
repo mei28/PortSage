@@ -8,6 +8,7 @@ pub struct KeyBindings {
     pub detail: Vec<KeyEvent>,
     pub filter: Vec<KeyEvent>,
     pub copy: Vec<KeyEvent>,
+    pub kill: Vec<KeyEvent>,
 }
 
 impl Default for KeyBindings {
@@ -31,6 +32,7 @@ impl Default for KeyBindings {
             detail: vec![KeyEvent::new(Tab, KeyModifiers::NONE)],
             filter: vec![KeyEvent::new(Char(':'), KeyModifiers::NONE)],
             copy: vec![KeyEvent::new(Enter, KeyModifiers::NONE)],
+            kill: vec![KeyEvent::new(Char('x'), KeyModifiers::NONE)],
         }
     }
 }
@@ -62,5 +64,9 @@ impl KeyBindings {
 
     pub fn is_copy(&self, key: &KeyEvent) -> bool {
         Self::matches(key, &self.copy)
+    }
+
+    pub fn is_kill(&self, key: &KeyEvent) -> bool {
+        Self::matches(key, &self.kill)
     }
 }
