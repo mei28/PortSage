@@ -111,20 +111,31 @@ pub fn run_tui(processes: &[ProcessInfo]) -> Result<()> {
                     Mode::ConfirmKill => match key_event.code {
                         event::KeyCode::Char('y') => {
                             if let Some(proc) = filtered_processes.get(selected_index) {
-                                let _ = nix::sys::signal::kill(
+                                let result = nix::sys::signal::kill(
                                     nix::unistd::Pid::from_raw(proc.pid),
                                     nix::sys::signal::Signal::SIGKILL,
                                 );
-                                break;
+
+                                clipboard_message.message = Some((
+                                    if result.is_ok() {
+                                        format!("✔ Killed process {}", proc.pid)
+                                    } else {
+                                        format!("✖ Failed to kill process {}", proc.pid)
+                                    },
+                                    std::time::Instant::now(),
+                                ));
                             }
-                            // プロセスリスト更新
+
                             filtered_processes = apply_filter(processes, &filter_input);
                             mode = Mode::Normal;
+                            // break;
                         }
                         event::KeyCode::Char('n') | event::KeyCode::Esc => {
                             mode = Mode::Normal;
                         }
-                        _ => {}
+                        _ => {
+                            mode = Mode::Normal;
+                        }
                     },
                 }
             }
