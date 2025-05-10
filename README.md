@@ -69,6 +69,18 @@ cargo build --release
 ./target/release/portsage --tui
 ```
 
+### 📦 Install from crates.io
+
+```bash
+cargo install portsage
+```
+
+### ❄️ Install via Nix Flakes
+
+
+```bash
+nix run github:mei28/PortSage
+```
 ---
 
 ## 📦 CLI Options
