@@ -50,7 +50,8 @@ pub fn get_all_processes() -> Vec<ProcessInfo> {
 
     let port_map: HashMap<u16, u32> = get_port_pid_map();
 
-    sys.processes()
+    let mut processes: Vec<ProcessInfo> = sys
+        .processes()
         .values()
         .map(|p| {
             let pid = p.pid().as_u32() as i32;
@@ -80,5 +81,10 @@ pub fn get_all_processes() -> Vec<ProcessInfo> {
                 ports,
             }
         })
-        .collect()
+        .collect();
+
+    // 🔽 ポート数が多い順に並び替え（0ポートのものが下に）
+    processes.sort_by_key(|p| std::cmp::Reverse(p.ports.len()));
+
+    processes
 }
