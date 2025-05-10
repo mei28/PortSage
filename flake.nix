@@ -1,7 +1,7 @@
 {
   description = "🔍 PortSage - TUI to monitor processes and their open ports";
 
-  inputs.nixpkgs.url = "github:NixOS/nixpkgs?ref=nixpkgs-unstable";
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
 
   outputs =
     { self, nixpkgs }:
@@ -12,55 +12,52 @@
         "x86_64-darwin"
         "aarch64-darwin"
       ];
-    in
-    {
-      packages = builtins.foldl' (
-        acc: system:
+
+      forAllSystems =
+        f:
+        builtins.listToAttrs (
+          map (system: {
+            name = system;
+            value = f system;
+          }) systems
+        );
+
+      packages = forAllSystems (
+        system:
         let
           pkgs = import nixpkgs { inherit system; };
+          isLinux = pkgs.stdenv.isLinux;
         in
-        acc
-        // {
-          ${system} = pkgs.rustPlatform.buildRustPackage {
-            pname = "portsage";
-            version = "0.1.0";
-            src = ./.;
-            cargoLock = {
-              lockFile = ./Cargo.lock;
-            };
-            nativeBuildInputs = with pkgs; [ pkg-config ];
-            buildInputs = with pkgs; [
-              libxkbcommon
-              x11
-            ];
-          };
+        pkgs.rustPlatform.buildRustPackage {
+          pname = "portsage";
+
+          version = "0.1.0";
+          src = ./.;
+          cargoLock.lockFile = ./Cargo.lock;
+          nativeBuildInputs = with pkgs; [ pkg-config ];
+          buildInputs =
+            with pkgs;
+            if isLinux then
+              [
+                libxkbcommon
+                xorg.libX11
+              ]
+            else
+              [ ];
         }
-      ) { } systems;
+      );
+    in
+    {
+      packages = packages;
 
-      defaultPackage = {
-        x86_64-linux = self.packages.x86_64-linux;
-        aarch64-linux = self.packages.aarch64-linux;
-        x86_64-darwin = self.packages.x86_64-darwin;
-        aarch64-darwin = self.packages.aarch64-darwin;
-      };
+      defaultPackage = forAllSystems (system: packages.${system});
 
-      defaultApp = {
-        x86_64-linux = {
-          type = "app";
-          program = "${self.packages.x86_64-linux}/bin/portsage";
-        };
-        aarch64-linux = {
-          type = "app";
-          program = "${self.packages.aarch64-linux}/bin/portsage";
-        };
-        x86_64-darwin = {
-          type = "app";
-          program = "${self.packages.x86_64-darwin}/bin/portsage";
-        };
-        aarch64-darwin = {
-          type = "app";
-          program = "${self.packages.aarch64-darwin}/bin/portsage";
-        };
-      };
+      apps = forAllSystems (system: {
+        type = "app";
+        program = "${packages.${system}}/bin/portsage";
+      });
+
+      defaultApp = forAllSystems (system: self.apps.${system});
     };
+
 }
