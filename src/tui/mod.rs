@@ -1,30 +1,28 @@
 mod clipboard;
+mod detail;
 mod filter;
 mod render;
 mod state;
 
 use crate::{bindings::KeyBindings, process::ProcessInfo};
 use anyhow::Result;
+use clipboard::copy_pid_to_clipboard;
 use crossterm::{
-    event::{self, Event, KeyCode},
+    event::{self, Event, KeyEvent},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use ratatui::{backend::CrosstermBackend, Terminal};
-use std::io;
-use std::time::Instant;
-
-use clipboard::copy_pid_to_clipboard;
 use filter::apply_filter;
 use render::draw_ui;
 use state::{ClipboardMessage, Mode};
+use std::io;
 
 pub fn run_tui(processes: &[ProcessInfo]) -> Result<()> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen)?;
-    let backend = CrosstermBackend::new(stdout);
-    let mut terminal = Terminal::new(backend)?;
+    let backend = ratatui::backend::CrosstermBackend::new(stdout);
+    let mut terminal = ratatui::Terminal::new(backend)?;
 
     let bindings = KeyBindings::default();
     let mut selected_index = 0;
@@ -51,50 +49,49 @@ pub fn run_tui(processes: &[ProcessInfo]) -> Result<()> {
         if event::poll(std::time::Duration::from_millis(100))? {
             if let Event::Key(key_event) = event::read()? {
                 match mode {
-                    Mode::Normal => {
-                        if bindings.is_quit(&key_event) {
-                            break;
-                        }
-
-                        let total = filtered_processes.len();
-                        let height = terminal.size()?.height.saturating_sub(4) as usize;
-
-                        if bindings.is_down(&key_event) {
-                            if selected_index + 1 < total {
+                    Mode::Normal => match key_event {
+                        _ if bindings.is_quit(&key_event) => break,
+                        _ if bindings.is_down(&key_event) => {
+                            if selected_index + 1 < filtered_processes.len() {
                                 selected_index += 1;
-                                if selected_index >= offset + height {
+                                if selected_index >= offset + 10 {
                                     offset += 1;
                                 }
                             }
-                        } else if bindings.is_up(&key_event) {
+                        }
+                        _ if bindings.is_up(&key_event) => {
                             if selected_index > 0 {
                                 selected_index -= 1;
                                 if selected_index < offset {
                                     offset -= 1;
                                 }
                             }
-                        } else if key_event.code == KeyCode::Char(':') {
+                        }
+                        _ if bindings.is_filter(&key_event) => {
                             mode = Mode::FilterInput;
                             filter_input.clear();
-                        } else if key_event.code == KeyCode::Enter {
+                        }
+                        _ if bindings.is_detail(&key_event) => {
+                            mode = Mode::Detail;
+                        }
+                        _ if bindings.is_copy(&key_event) => {
                             if let Some(proc) = filtered_processes.get(selected_index) {
                                 copy_pid_to_clipboard(proc, &mut clipboard_message);
                             }
-                        } else if key_event.code == KeyCode::Tab {
-                            mode = Mode::Detail;
                         }
-                    }
+                        _ => {}
+                    },
 
                     Mode::FilterInput => match key_event.code {
-                        KeyCode::Esc => mode = Mode::Normal,
-                        KeyCode::Enter => mode = Mode::Normal,
-                        KeyCode::Char(c) => {
+                        event::KeyCode::Esc => mode = Mode::Normal,
+                        event::KeyCode::Enter => mode = Mode::Normal,
+                        event::KeyCode::Char(c) => {
                             filter_input.push(c);
                             filtered_processes = apply_filter(processes, &filter_input);
                             selected_index = 0;
                             offset = 0;
                         }
-                        KeyCode::Backspace => {
+                        event::KeyCode::Backspace => {
                             filter_input.pop();
                             filtered_processes = apply_filter(processes, &filter_input);
                             selected_index = 0;
@@ -103,11 +100,11 @@ pub fn run_tui(processes: &[ProcessInfo]) -> Result<()> {
                         _ => {}
                     },
 
-                    Mode::Detail => {
-                        if key_event.code == KeyCode::Esc {
-                            mode = Mode::Normal;
-                        }
-                    }
+                    Mode::Detail => match key_event.code {
+                        event::KeyCode::Esc => mode = Mode::Normal,
+                        event::KeyCode::Char('q') => mode = Mode::Normal,
+                        _ => {}
+                    },
                 }
             }
         }

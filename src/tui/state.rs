@@ -11,3 +11,4 @@ pub enum Mode {
 pub struct ClipboardMessage {
     pub message: Option<(String, Instant)>,
 }
+

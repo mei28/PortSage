@@ -1,48 +1,56 @@
-use sysinfo::{Process, System};
+use sysinfo::{PidExt, ProcessExt, System, SystemExt};
 use tabled::Tabled;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ProcessInfo {
     pub pid: i32,
     pub name: String,
     pub cmd: Vec<String>,
     pub exe: String,
+    pub status: String,
+    pub cpu_usage: f32,
+    pub memory: u64,
+    pub virtual_memory: u64,
+    pub parent_pid: Option<i32>,
+    pub start_time: u64,
+    pub cwd: String,
 }
 
-#[derive(Debug, Clone, Tabled)]
+#[derive(Tabled)]
 pub struct DisplayProcessInfo {
     pub pid: i32,
     pub name: String,
-    pub cmd: String,
-    pub exe: String,
+    pub command: String,
 }
 
 impl From<&ProcessInfo> for DisplayProcessInfo {
     fn from(p: &ProcessInfo) -> Self {
-        Self {
+        DisplayProcessInfo {
             pid: p.pid,
             name: p.name.clone(),
-            cmd: p.cmd.join(" "),
-            exe: p.exe.clone(),
+            command: p.cmd.join(" "),
         }
     }
 }
 
 pub fn get_all_processes() -> Vec<ProcessInfo> {
-    let mut system = System::new_all();
-    system.refresh_all();
+    let mut sys = System::new_all();
+    sys.refresh_all();
 
-    system
-        .processes()
+    sys.processes()
         .values()
-        .map(|process| ProcessInfo {
-            pid: process.pid().as_u32() as i32,
-            name: process.name().to_string(),
-            cmd: process.cmd().to_vec(),
-            exe: process
-                .exe()
-                .map(|p| p.display().to_string())
-                .unwrap_or_else(|| "".to_string()),
+        .map(|p| ProcessInfo {
+            pid: p.pid().as_u32() as i32,
+            name: p.name().to_string(),
+            cmd: p.cmd().to_vec(),
+            exe: p.exe().display().to_string(),
+            status: format!("{:?}", p.status()),
+            cpu_usage: p.cpu_usage(),
+            memory: p.memory(),
+            virtual_memory: p.virtual_memory(),
+            parent_pid: p.parent().map(|pid| pid.as_u32() as i32),
+            start_time: p.start_time(),
+            cwd: p.cwd().display().to_string(),
         })
         .collect()
 }

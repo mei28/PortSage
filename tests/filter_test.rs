@@ -6,7 +6,14 @@ fn mock_process(pid: i32, name: &str, cmd: &[&str]) -> ProcessInfo {
         pid,
         name: name.to_string(),
         cmd: cmd.iter().map(|s| s.to_string()).collect(),
-        exe: "".to_string(),
+        exe: "/usr/bin/dummy".into(),
+        status: "Running".into(),
+        cpu_usage: 0.0,
+        memory: 1024,
+        virtual_memory: 2048,
+        parent_pid: Some(1),
+        start_time: 0,
+        cwd: "/tmp".into(),
     }
 }
 

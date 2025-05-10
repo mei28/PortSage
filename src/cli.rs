@@ -10,8 +10,8 @@ pub struct Cli {
     #[arg(short, long)]
     pub port: Option<u16>,
 
-    // #[arg(long)]
-    // pub json: bool,
+    #[arg(long)]
+    pub json: bool,
 
     #[arg(long)]
     pub kill: Option<u32>,

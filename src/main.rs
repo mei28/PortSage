@@ -1,10 +1,8 @@
 use clap::Parser;
 use portsage::tui::run_tui;
 use portsage::{
-    cli::Cli,
-    filter::filter_processes_by_name,
-    port::get_port_pid_map,
-    process::{get_all_processes, DisplayProcessInfo},
+    cli::Cli, filter::filter_processes_by_name, port::get_port_pid_map, process::get_all_processes,
+    process::DisplayProcessInfo,
 };
 use tabled::settings::Style;
 use tabled::Table;
