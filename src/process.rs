@@ -1,4 +1,5 @@
 use sysinfo::{Process, System};
+use tabled::Tabled;
 
 #[derive(Debug, Clone)]
 pub struct ProcessInfo {
@@ -6,6 +7,25 @@ pub struct ProcessInfo {
     pub name: String,
     pub cmd: Vec<String>,
     pub exe: String,
+}
+
+#[derive(Debug, Clone, Tabled)]
+pub struct DisplayProcessInfo {
+    pub pid: i32,
+    pub name: String,
+    pub cmd: String,
+    pub exe: String,
+}
+
+impl From<&ProcessInfo> for DisplayProcessInfo {
+    fn from(p: &ProcessInfo) -> Self {
+        Self {
+            pid: p.pid,
+            name: p.name.clone(),
+            cmd: p.cmd.join(" "),
+            exe: p.exe.clone(),
+        }
+    }
 }
 
 pub fn get_all_processes() -> Vec<ProcessInfo> {
