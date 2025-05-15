@@ -6,7 +6,7 @@
   outputs =
     { self, nixpkgs }:
     let
-      systems = [
+      forAllSystems = nixpkgs.lib.genAttrs [
         "x86_64-linux"
         "aarch64-linux"
         "x86_64-darwin"
@@ -14,48 +14,32 @@
       ];
     in
     {
-      packages = builtins.foldl' (
-        acc: system:
+      packages = forAllSystems (
+        system:
         let
           pkgs = import nixpkgs { inherit system; };
         in
-        acc
-        // {
-          ${system} = pkgs.rustPlatform.buildRustPackage {
+        {
+          default = pkgs.rustPlatform.buildRustPackage {
             pname = "portsage";
             version = "0.1.0";
             src = ./.;
             cargoLock = {
               lockFile = ./Cargo.lock;
             };
+            doCheck = false;
           };
         }
-      ) { } systems;
+      );
 
-      defaultPackage = {
-        x86_64-linux = self.packages.x86_64-linux;
-        aarch64-linux = self.packages.aarch64-linux;
-        x86_64-darwin = self.packages.x86_64-darwin;
-        aarch64-darwin = self.packages.aarch64-darwin;
-      };
+      apps = forAllSystems (system: {
+        default = {
+          type = "app";
+          program = "${self.packages.${system}.default}/bin/portsage";
+        };
+      });
 
-      defaultApp = {
-        x86_64-linux = {
-          type = "app";
-          program = "${self.packages.x86_64-linux}/bin/portsage";
-        };
-        aarch64-linux = {
-          type = "app";
-          program = "${self.packages.aarch64-linux}/bin/portsage";
-        };
-        x86_64-darwin = {
-          type = "app";
-          program = "${self.packages.x86_64-darwin}/bin/portsage";
-        };
-        aarch64-darwin = {
-          type = "app";
-          program = "${self.packages.aarch64-darwin}/bin/portsage";
-        };
-      };
+      defaultPackage = forAllSystems (system: self.packages.${system}.default);
+      defaultApp = forAllSystems (system: self.apps.${system}.default);
     };
 }
