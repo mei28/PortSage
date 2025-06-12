@@ -4,7 +4,7 @@ use crate::process::ProcessInfo;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     prelude::*,
-    widgets::{Block, Borders, Cell, Paragraph, Row, Table},
+    widgets::{Block, Borders, Cell, Clear, Paragraph, Row, Table},
 };
 
 pub fn draw_view(
@@ -147,6 +147,9 @@ fn draw_floating_detail(f: &mut Frame, proc: &ProcessInfo) {
     let y = (area.height.saturating_sub(height)) / 2;
     let detail_area = Rect::new(x, y, width, height);
 
+    // 背景をクリアして透けを防ぐ
+    f.render_widget(Clear, detail_area);
+
     let content = vec![
         format!("PID: {}", proc.pid),
         format!("Name: {}", proc.name),
@@ -178,10 +181,9 @@ fn draw_floating_detail(f: &mut Frame, proc: &ProcessInfo) {
             Block::default()
                 .title("Process Detail")
                 .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::Yellow))
-                .style(Style::default().bg(Color::Black)),
+                .border_style(Style::default().fg(Color::Yellow)),
         )
-        .style(Style::default().fg(Color::White));
+        .style(Style::default().fg(Color::White).bg(Color::Black));
 
     f.render_widget(paragraph, detail_area);
 }

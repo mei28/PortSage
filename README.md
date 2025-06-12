@@ -73,6 +73,7 @@ cargo build --release
 
 ```bash
 cargo install portsage
+portsage --tui
 ```
 
 ### ❄️ Install via Nix Flakes
@@ -90,11 +91,12 @@ USAGE:
     portsage [OPTIONS]
 
 OPTIONS:
+    -c, --cli               Use CLI mode (non-interactive)
     -f, --filter <STRING>   Filter keyword
     -p, --port <PORT>       Filter by port
-        --json              Output as JSON (non-TUI)
+        --json              Output as JSON (CLI mode only)
         --kill <PID>        Kill process by PID
-        --tui               Launch interactive TUI
+        --tui               Launch interactive TUI (default)
 ```
 
 ---
@@ -104,4 +106,34 @@ OPTIONS:
 
 * 🦀 Rust 1.70+
 * Linux/macOS (requires `lsof`)
+
+---
+
+## 🎯 Examples
+
+### TUI Mode (Default)
+```bash
+# Launch interactive TUI
+portsage
+# or explicitly
+portsage --tui
+```
+
+### CLI Mode
+```bash
+# List all processes with ports
+portsage --cli
+
+# Filter by process name
+portsage --cli --filter nginx
+
+# Filter by port
+portsage --cli --port 8080
+
+# Output as JSON
+portsage --cli --json
+
+# Kill a process
+portsage --kill 1234
+```
 
