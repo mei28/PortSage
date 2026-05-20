@@ -10,6 +10,17 @@ use ratatui::{
 /// メインレイアウトの最大幅。これを超える幅は左右マージンで切り落とす
 const MAX_CONTENT_WIDTH: u16 = 120;
 
+/// 2 ペインレイアウト (左: リスト, 右: 詳細) を有効化する最小幅
+const TWO_PANE_MIN_WIDTH: u16 = 100;
+
+/// 2 ペイン時、左ペイン (プロセス一覧) が占める割合 (%)
+const LIST_PANE_PERCENT: u16 = 60;
+
+/// width が 2 ペイン表示に十分なら true。それ以下は単一ペインにフォールバック
+fn is_two_pane(width: u16) -> bool {
+    width >= TWO_PANE_MIN_WIDTH
+}
+
 /// area が max_width を超える場合に中央寄せでクランプした Rect を返す。
 /// それ以下ならそのまま返す。フローティングダイアログなど画面全体を基準に
 /// したい領域には適用しない。
@@ -36,13 +47,27 @@ pub fn draw_view(
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(3), // header
-            Constraint::Min(1),    // table
+            Constraint::Min(1),    // middle (list, or list+detail)
             Constraint::Length(3), // message
         ])
         .split(area);
 
     draw_header(f, layout[0], filter_input, mode);
-    draw_table(f, layout[1], processes, selected_index, offset);
+
+    if is_two_pane(area.width) {
+        let panes = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Percentage(LIST_PANE_PERCENT),
+                Constraint::Percentage(100 - LIST_PANE_PERCENT),
+            ])
+            .split(layout[1]);
+        draw_table(f, panes[0], processes, selected_index, offset);
+        draw_right_pane(f, panes[1], processes.get(selected_index));
+    } else {
+        draw_table(f, layout[1], processes, selected_index, offset);
+    }
+
     draw_clipboard_message(f, layout[2], clipboard_message);
 
     if matches!(mode, Mode::Detail) {
@@ -53,6 +78,60 @@ pub fn draw_view(
     if matches!(mode, Mode::ConfirmKill) {
         draw_kill_confirm(f, area);
     }
+}
+
+fn draw_right_pane(f: &mut Frame, area: Rect, proc: Option<&ProcessInfo>) {
+    match proc {
+        Some(p) => f.render_widget(detail_paragraph(p), area),
+        None => {
+            let empty = Paragraph::new("No process selected")
+                .block(
+                    Block::default()
+                        .title("Process Detail")
+                        .borders(Borders::ALL)
+                        .border_style(Style::default().fg(Color::DarkGray)),
+                )
+                .style(Style::default().fg(Color::DarkGray));
+            f.render_widget(empty, area);
+        }
+    }
+}
+
+fn detail_paragraph(proc: &ProcessInfo) -> Paragraph<'static> {
+    let content = vec![
+        format!("PID: {}", proc.pid),
+        format!("Name: {}", proc.name),
+        format!("Status: {}", proc.status),
+        format!("CPU Usage: {:.2}%", proc.cpu_usage),
+        format!("Memory: {} KB", proc.memory),
+        format!("Virtual Memory: {} KB", proc.virtual_memory),
+        format!(
+            "Parent PID: {}",
+            proc.parent_pid.map_or("N/A".into(), |p| p.to_string())
+        ),
+        format!("Start Time: {}", proc.start_time),
+        format!("Exe: {}", proc.exe),
+        format!("CWD: {}", proc.cwd),
+        format!(
+            "Ports: {}",
+            proc.ports
+                .iter()
+                .map(|p| p.to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        format!("Cmd: {}", proc.cmd.join(" ")),
+    ]
+    .join("\n");
+
+    Paragraph::new(content)
+        .block(
+            Block::default()
+                .title("Process Detail")
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Yellow)),
+        )
+        .style(Style::default().fg(Color::White))
 }
 
 fn draw_kill_confirm(f: &mut Frame, area: Rect) {
@@ -163,43 +242,10 @@ fn draw_floating_detail(f: &mut Frame, area: Rect, proc: &ProcessInfo) {
 
     // 背景をクリアして透けを防ぐ
     f.render_widget(Clear, detail_area);
-
-    let content = vec![
-        format!("PID: {}", proc.pid),
-        format!("Name: {}", proc.name),
-        format!("Status: {}", proc.status),
-        format!("CPU Usage: {:.2}%", proc.cpu_usage),
-        format!("Memory: {} KB", proc.memory),
-        format!("Virtual Memory: {} KB", proc.virtual_memory),
-        format!(
-            "Parent PID: {}",
-            proc.parent_pid.map_or("N/A".into(), |p| p.to_string())
-        ),
-        format!("Start Time: {}", proc.start_time),
-        format!("Exe: {}", proc.exe),
-        format!("CWD: {}", proc.cwd),
-        format!(
-            "Ports: {}",
-            proc.ports
-                .iter()
-                .map(|p| p.to_string())
-                .collect::<Vec<_>>()
-                .join(", ")
-        ),
-        format!("Cmd: {}", proc.cmd.join(" ")),
-    ]
-    .join("\n");
-
-    let paragraph = Paragraph::new(content)
-        .block(
-            Block::default()
-                .title("Process Detail")
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::Yellow)),
-        )
-        .style(Style::default().fg(Color::White).bg(Color::Black));
-
-    f.render_widget(paragraph, detail_area);
+    f.render_widget(
+        detail_paragraph(proc).style(Style::default().fg(Color::White).bg(Color::Black)),
+        detail_area,
+    );
 }
 
 #[cfg(test)]
@@ -234,5 +280,18 @@ mod tests {
         let result = viewport(area, 120);
 
         assert_eq!(result, area);
+    }
+
+    #[test]
+    fn is_two_pane_returns_false_below_threshold() {
+        assert!(!is_two_pane(80));
+        assert!(!is_two_pane(99));
+    }
+
+    #[test]
+    fn is_two_pane_returns_true_at_or_above_threshold() {
+        assert!(is_two_pane(100));
+        assert!(is_two_pane(120));
+        assert!(is_two_pane(200));
     }
 }
