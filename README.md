@@ -5,9 +5,11 @@ PortSage is a sleek TUI (Terminal User Interface) tool that helps you:
 * 🧭 **Explore processes** on your machine
 * 🔍 **Filter** by name, command, PID, or port
 * 📍 **View ports** associated with each process
-* 🪄 **Inspect process details** in a floating modal
+* 🪄 **Inspect process details** in a side panel or floating modal
 * 🗑️ **Kill processes interactively** with confirmation dialog
 * 📋 **Copy PID** to clipboard with one key
+* 🎨 **Switch themes** between Kanagawa, Tokyo Night, and Nord
+* 🪟 **Adapts to terminal width** with a two-pane layout on wide screens
 
 ---
 
@@ -46,6 +48,25 @@ PortSage is a sleek TUI (Terminal User Interface) tool that helps you:
 * Press `n` or `Esc` to cancel
 * ✅ Success message shown after killing
 
+### 🪟 Responsive Layout
+
+* Terminals **≥ 100 columns** wide split into a list pane (left) and a live detail panel (right)
+* The right panel updates as you navigate; `Tab` still opens a full-screen expanded view
+* Narrower terminals fall back to a single-pane list with the floating Tab modal
+* The whole UI is capped at **120 columns** and centered, so ultra-wide terminals stay readable
+
+### 🎨 Themes
+
+* Three built-in palettes: **Kanagawa** (default), **Tokyo Night**, **Nord**
+* Pick one with `--theme <name>` or set `PORTSAGE_THEME=<name>`
+* The CLI flag wins over the env var; unknown names exit with a clear error
+
+```bash
+portsage                          # Kanagawa (default)
+portsage --theme tokyonight       # Tokyo Night via flag
+PORTSAGE_THEME=nord portsage      # Nord via env var
+```
+
 ---
 
 ## 🎮 Key Bindings
@@ -66,14 +87,14 @@ PortSage is a sleek TUI (Terminal User Interface) tool that helps you:
 
 ```bash
 cargo build --release
-./target/release/portsage --tui
+./target/release/portsage
 ```
 
 ### 📦 Install from crates.io
 
 ```bash
 cargo install portsage
-portsage --tui
+portsage
 ```
 
 ### ❄️ Install via Nix Flakes
@@ -91,13 +112,17 @@ USAGE:
     portsage [OPTIONS]
 
 OPTIONS:
-    -c, --cli               Use CLI mode (non-interactive)
+        --cli               Use CLI mode (non-interactive). TUI is the default.
     -f, --filter <STRING>   Filter keyword
     -p, --port <PORT>       Filter by port
         --json              Output as JSON (CLI mode only)
         --kill <PID>        Kill process by PID
-        --tui               Launch interactive TUI (default)
+        --theme <NAME>      Color theme: kanagawa, tokyonight, or nord
+    -h, --help              Print help
+    -V, --version           Print version
 ```
+
+Theme can also be set via the `PORTSAGE_THEME` environment variable. The CLI flag takes precedence.
 
 ---
 
@@ -115,8 +140,12 @@ OPTIONS:
 ```bash
 # Launch interactive TUI
 portsage
-# or explicitly
-portsage --tui
+
+# Use a specific theme
+portsage --theme tokyonight
+
+# Or set the theme via env var
+PORTSAGE_THEME=nord portsage
 ```
 
 ### CLI Mode
