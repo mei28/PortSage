@@ -1,5 +1,6 @@
 use super::detail::draw_process_detail;
 use super::state::{ClipboardMessage, Mode};
+use super::theme::Theme;
 use crate::process::ProcessInfo;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
@@ -40,6 +41,7 @@ pub fn draw_view(
     filter_input: &str,
     mode: &Mode,
     clipboard_message: &ClipboardMessage,
+    theme: &Theme,
 ) {
     let area = viewport(f.size(), MAX_CONTENT_WIDTH);
 
@@ -52,7 +54,7 @@ pub fn draw_view(
         ])
         .split(area);
 
-    draw_header(f, layout[0], filter_input, mode);
+    draw_header(f, layout[0], filter_input, mode, theme);
 
     if is_two_pane(area.width) {
         let panes = Layout::default()
@@ -62,42 +64,42 @@ pub fn draw_view(
                 Constraint::Percentage(100 - LIST_PANE_PERCENT),
             ])
             .split(layout[1]);
-        draw_table(f, panes[0], processes, selected_index, offset);
-        draw_right_pane(f, panes[1], processes.get(selected_index));
+        draw_table(f, panes[0], processes, selected_index, offset, theme);
+        draw_right_pane(f, panes[1], processes.get(selected_index), theme);
     } else {
-        draw_table(f, layout[1], processes, selected_index, offset);
+        draw_table(f, layout[1], processes, selected_index, offset, theme);
     }
 
-    draw_clipboard_message(f, layout[2], clipboard_message);
+    draw_clipboard_message(f, layout[2], clipboard_message, theme);
 
     if matches!(mode, Mode::Detail) {
         if let Some(proc) = processes.get(selected_index) {
-            draw_floating_detail(f, area, proc);
+            draw_floating_detail(f, area, proc, theme);
         }
     }
     if matches!(mode, Mode::ConfirmKill) {
-        draw_kill_confirm(f, area);
+        draw_kill_confirm(f, area, theme);
     }
 }
 
-fn draw_right_pane(f: &mut Frame, area: Rect, proc: Option<&ProcessInfo>) {
+fn draw_right_pane(f: &mut Frame, area: Rect, proc: Option<&ProcessInfo>, theme: &Theme) {
     match proc {
-        Some(p) => f.render_widget(detail_paragraph(p), area),
+        Some(p) => f.render_widget(detail_paragraph(p, theme), area),
         None => {
             let empty = Paragraph::new("No process selected")
                 .block(
                     Block::default()
                         .title("Process Detail")
                         .borders(Borders::ALL)
-                        .border_style(Style::default().fg(Color::DarkGray)),
+                        .border_style(Style::default().fg(theme.muted)),
                 )
-                .style(Style::default().fg(Color::DarkGray));
+                .style(Style::default().fg(theme.muted));
             f.render_widget(empty, area);
         }
     }
 }
 
-fn detail_paragraph(proc: &ProcessInfo) -> Paragraph<'static> {
+fn detail_paragraph(proc: &ProcessInfo, theme: &Theme) -> Paragraph<'static> {
     let content = vec![
         format!("PID: {}", proc.pid),
         format!("Name: {}", proc.name),
@@ -129,12 +131,12 @@ fn detail_paragraph(proc: &ProcessInfo) -> Paragraph<'static> {
             Block::default()
                 .title("Process Detail")
                 .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::Yellow)),
+                .border_style(Style::default().fg(theme.border_active)),
         )
-        .style(Style::default().fg(Color::White))
+        .style(Style::default().fg(theme.fg))
 }
 
-fn draw_kill_confirm(f: &mut Frame, area: Rect) {
+fn draw_kill_confirm(f: &mut Frame, area: Rect, theme: &Theme) {
     let width = 40;
     let height = 5;
     let x = area.x + (area.width.saturating_sub(width)) / 2;
@@ -142,9 +144,7 @@ fn draw_kill_confirm(f: &mut Frame, area: Rect) {
     let dialog_area = Rect::new(x, y, width, height);
 
     // 背景を塗りつぶしてゴミ表示を防ぐ
-    let clear = Paragraph::new("".repeat((width * height) as usize))
-        .style(Style::default().bg(Color::Black));
-    f.render_widget(clear, dialog_area);
+    f.render_widget(Clear, dialog_area);
 
     let text = "Kill this process? (y/n)";
     let paragraph = Paragraph::new(text)
@@ -152,21 +152,25 @@ fn draw_kill_confirm(f: &mut Frame, area: Rect) {
             Block::default()
                 .title("Confirm Kill")
                 .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::Red))
-                .style(Style::default().bg(Color::Black)),
+                .border_style(Style::default().fg(theme.danger))
+                .style(Style::default().bg(theme.modal_bg)),
         )
-        .style(Style::default().fg(Color::White));
+        .style(Style::default().fg(theme.fg).bg(theme.modal_bg));
     f.render_widget(paragraph, dialog_area);
 }
 
-fn draw_header(f: &mut Frame, area: Rect, filter_input: &str, mode: &Mode) {
+fn draw_header(f: &mut Frame, area: Rect, filter_input: &str, mode: &Mode, theme: &Theme) {
     let text = match mode {
         Mode::FilterInput => format!("Filter: {filter_input}"),
         _ => "PortSage - TUI (↑/↓/j/k: move, enter: copy pid, tab: detail, q: quit)".to_string(),
     };
     let paragraph = Paragraph::new(text)
-        .style(Style::default().fg(Color::Cyan))
-        .block(Block::default().borders(Borders::BOTTOM));
+        .style(Style::default().fg(theme.accent))
+        .block(
+            Block::default()
+                .borders(Borders::BOTTOM)
+                .border_style(Style::default().fg(theme.border)),
+        );
     f.render_widget(paragraph, area);
 }
 
@@ -176,6 +180,7 @@ fn draw_table(
     processes: &[ProcessInfo],
     selected_index: usize,
     offset: usize,
+    theme: &Theme,
 ) {
     let rows = processes
         .iter()
@@ -184,13 +189,14 @@ fn draw_table(
         .enumerate()
         .map(|(i, p)| {
             let style = if i + offset == selected_index {
-                Style::default().bg(Color::DarkGray)
+                Style::default().bg(theme.selection)
             } else {
                 Style::default()
             };
             Row::new(vec![
-                Cell::from(p.pid.to_string()).style(Style::default().fg(Color::Green)),
-                Cell::from(p.name.clone()).style(Style::default().add_modifier(Modifier::BOLD)),
+                Cell::from(p.pid.to_string()).style(Style::default().fg(theme.pid)),
+                Cell::from(p.name.clone())
+                    .style(Style::default().fg(theme.fg).add_modifier(Modifier::BOLD)),
                 Cell::from(
                     p.ports
                         .iter()
@@ -198,8 +204,8 @@ fn draw_table(
                         .collect::<Vec<_>>()
                         .join(", "),
                 )
-                .style(Style::default().fg(Color::Yellow)),
-                Cell::from(p.cmd.join(" ")).style(Style::default().fg(Color::Blue)),
+                .style(Style::default().fg(theme.port)),
+                Cell::from(p.cmd.join(" ")).style(Style::default().fg(theme.command)),
             ])
             .style(style)
         });
@@ -214,26 +220,40 @@ fn draw_table(
         ],
     )
     .header(
-        Row::new(vec!["PID", "Name", "Ports", "Command"]).style(Style::default().fg(Color::Yellow)),
+        Row::new(vec!["PID", "Name", "Ports", "Command"])
+            .style(Style::default().fg(theme.header_label)),
     )
-    .block(Block::default().borders(Borders::ALL))
+    .block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(theme.border)),
+    )
     .column_spacing(2);
 
     f.render_widget(table, area);
 }
 
-fn draw_clipboard_message(f: &mut Frame, area: Rect, clipboard_message: &ClipboardMessage) {
+fn draw_clipboard_message(
+    f: &mut Frame,
+    area: Rect,
+    clipboard_message: &ClipboardMessage,
+    theme: &Theme,
+) {
     if let Some((msg, ts)) = &clipboard_message.message {
         if ts.elapsed().as_secs_f32() < 2.0 {
             let p = Paragraph::new(msg.clone())
-                .style(Style::default().fg(Color::Green))
-                .block(Block::default().borders(Borders::TOP));
+                .style(Style::default().fg(theme.success))
+                .block(
+                    Block::default()
+                        .borders(Borders::TOP)
+                        .border_style(Style::default().fg(theme.border)),
+                );
             f.render_widget(p, area);
         }
     }
 }
 
-fn draw_floating_detail(f: &mut Frame, area: Rect, proc: &ProcessInfo) {
+fn draw_floating_detail(f: &mut Frame, area: Rect, proc: &ProcessInfo, theme: &Theme) {
     let width = area.width.saturating_sub(10).min(100);
     let height = 13;
     let x = area.x + (area.width.saturating_sub(width)) / 2;
@@ -243,7 +263,7 @@ fn draw_floating_detail(f: &mut Frame, area: Rect, proc: &ProcessInfo) {
     // 背景をクリアして透けを防ぐ
     f.render_widget(Clear, detail_area);
     f.render_widget(
-        detail_paragraph(proc).style(Style::default().fg(Color::White).bg(Color::Black)),
+        detail_paragraph(proc, theme).style(Style::default().fg(theme.fg).bg(theme.modal_bg)),
         detail_area,
     );
 }
