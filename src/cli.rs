@@ -18,4 +18,9 @@ pub struct Cli {
 
     #[arg(long)]
     pub cli: bool,
+
+    /// Color theme: kanagawa (default), tokyonight, or nord.
+    /// Overrides PORTSAGE_THEME env var.
+    #[arg(long)]
+    pub theme: Option<String>,
 }
