@@ -20,6 +20,7 @@ fn test_filter_sample() {
         parent_pid: Some(1),
         start_time: 0,
         cwd: "/home/dummy".into(),
+        ports: vec![],
     };
 
     assert!(mock_proc.name.contains("dummy"));

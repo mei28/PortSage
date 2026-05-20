@@ -14,6 +14,7 @@ fn mock_process(pid: i32, name: &str, cmd: &[&str]) -> ProcessInfo {
         parent_pid: Some(1),
         start_time: 0,
         cwd: "/tmp".into(),
+        ports: vec![],
     }
 }
 
