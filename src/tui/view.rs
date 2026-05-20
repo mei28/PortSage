@@ -7,6 +7,20 @@ use ratatui::{
     widgets::{Block, Borders, Cell, Clear, Paragraph, Row, Table},
 };
 
+/// メインレイアウトの最大幅。これを超える幅は左右マージンで切り落とす
+const MAX_CONTENT_WIDTH: u16 = 120;
+
+/// area が max_width を超える場合に中央寄せでクランプした Rect を返す。
+/// それ以下ならそのまま返す。フローティングダイアログなど画面全体を基準に
+/// したい領域には適用しない。
+fn viewport(area: Rect, max_width: u16) -> Rect {
+    if area.width <= max_width {
+        return area;
+    }
+    let x_offset = (area.width - max_width) / 2;
+    Rect::new(area.x + x_offset, area.y, max_width, area.height)
+}
+
 pub fn draw_view(
     f: &mut Frame,
     processes: &[ProcessInfo],
@@ -16,6 +30,8 @@ pub fn draw_view(
     mode: &Mode,
     clipboard_message: &ClipboardMessage,
 ) {
+    let area = viewport(f.size(), MAX_CONTENT_WIDTH);
+
     let layout = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -23,7 +39,7 @@ pub fn draw_view(
             Constraint::Min(1),    // table
             Constraint::Length(3), // message
         ])
-        .split(f.size());
+        .split(area);
 
     draw_header(f, layout[0], filter_input, mode);
     draw_table(f, layout[1], processes, selected_index, offset);
@@ -31,20 +47,19 @@ pub fn draw_view(
 
     if matches!(mode, Mode::Detail) {
         if let Some(proc) = processes.get(selected_index) {
-            draw_floating_detail(f, proc);
+            draw_floating_detail(f, area, proc);
         }
     }
     if matches!(mode, Mode::ConfirmKill) {
-        draw_kill_confirm(f);
+        draw_kill_confirm(f, area);
     }
 }
 
-fn draw_kill_confirm(f: &mut Frame) {
-    let area = f.size();
+fn draw_kill_confirm(f: &mut Frame, area: Rect) {
     let width = 40;
     let height = 5;
-    let x = (area.width.saturating_sub(width)) / 2;
-    let y = (area.height.saturating_sub(height)) / 2;
+    let x = area.x + (area.width.saturating_sub(width)) / 2;
+    let y = area.y + (area.height.saturating_sub(height)) / 2;
     let dialog_area = Rect::new(x, y, width, height);
 
     // 背景を塗りつぶしてゴミ表示を防ぐ
@@ -139,12 +154,11 @@ fn draw_clipboard_message(f: &mut Frame, area: Rect, clipboard_message: &Clipboa
     }
 }
 
-fn draw_floating_detail(f: &mut Frame, proc: &ProcessInfo) {
-    let area = f.size();
+fn draw_floating_detail(f: &mut Frame, area: Rect, proc: &ProcessInfo) {
     let width = area.width.saturating_sub(10).min(100);
     let height = 13;
-    let x = (area.width.saturating_sub(width)) / 2;
-    let y = (area.height.saturating_sub(height)) / 2;
+    let x = area.x + (area.width.saturating_sub(width)) / 2;
+    let y = area.y + (area.height.saturating_sub(height)) / 2;
     let detail_area = Rect::new(x, y, width, height);
 
     // 背景をクリアして透けを防ぐ
@@ -186,4 +200,39 @@ fn draw_floating_detail(f: &mut Frame, proc: &ProcessInfo) {
         .style(Style::default().fg(Color::White).bg(Color::Black));
 
     f.render_widget(paragraph, detail_area);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn viewport_clamps_wide_area_to_max_width_and_centers_it() {
+        let area = Rect::new(0, 0, 200, 40);
+
+        let result = viewport(area, 120);
+
+        assert_eq!(result.x, 40);
+        assert_eq!(result.y, 0);
+        assert_eq!(result.width, 120);
+        assert_eq!(result.height, 40);
+    }
+
+    #[test]
+    fn viewport_returns_area_unchanged_when_narrower_than_max() {
+        let area = Rect::new(0, 0, 80, 24);
+
+        let result = viewport(area, 120);
+
+        assert_eq!(result, area);
+    }
+
+    #[test]
+    fn viewport_returns_area_unchanged_when_exactly_at_max() {
+        let area = Rect::new(0, 0, 120, 30);
+
+        let result = viewport(area, 120);
+
+        assert_eq!(result, area);
+    }
 }
