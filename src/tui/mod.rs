@@ -3,6 +3,7 @@ mod detail;
 mod filter;
 mod render;
 mod state;
+pub mod theme;
 mod view;
 
 use crate::{bindings::KeyBindings, process::ProcessInfo};
@@ -18,9 +19,10 @@ use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
 use state::{ClipboardMessage, Mode};
 use std::io;
+use theme::Theme;
 use view::draw_view;
 
-pub fn run_tui(processes: &[ProcessInfo]) -> Result<()> {
+pub fn run_tui(processes: &[ProcessInfo], theme: &Theme) -> Result<()> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen)?;
@@ -45,6 +47,7 @@ pub fn run_tui(processes: &[ProcessInfo]) -> Result<()> {
                 &filter_input,
                 &mode,
                 &clipboard_message,
+                theme,
             );
         })?;
 
